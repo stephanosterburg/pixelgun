@@ -1,0 +1,279 @@
+#! /Applications/Nuke12.0v3/Nuke12.0v3.app/Contents/MacOS/libnuke-12.0.3.dylib -nx
+#write_info Write_Proof file:"/tmp/PROOF_OUTPUT.jpg" format:"1920 1080 1" chans:":rgba.red:rgba.green:rgba.blue:" framerange:"1 100" fps:"0" colorspace:"default (sRGB)" datatype:"8 bit" transfer:"unknown" views:"main" colorManagement:"Nuke"
+version 12.0 v3
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="0" y="23" w="2560" h="1395" maximized="1" screen="0">
+        <splitter orientation="1">
+            <split size="40"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1897" stretch="1"/>
+            <splitter orientation="2">
+                <split size="804"/>
+                <dock id="" activePageId="Viewer.1" focus="true">
+                    <page id="Viewer.1"/>
+                </dock>
+                <split size="566"/>
+                <dock id="" activePageId="DAG.1">
+                    <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                </dock>
+            </splitter>
+            <split size="615"/>
+            <dock id="" activePageId="Properties.1">
+                <page id="Properties.1"/>
+                <page id="uk.co.thefoundry.backgroundrenderview.1"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+ inputs 0
+ name /Users/px/Projects/pxproofs/proof_comp_template.nk
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ proxy_type scale
+ proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
+ colorManagement Nuke
+ workingSpaceLUT linear
+ monitorLut sRGB
+ int8Lut sRGB
+ int16Lut sRGB
+ logLut Cineon
+ floatLut linear
+}
+Constant {
+ inputs 0
+ channels rgb
+ name BG
+ xpos -221
+ ypos -129
+}
+Read {
+ inputs 0
+ file_type png
+ file /Volumes/Bigfoot/Pixelgun_Resources/preferences/proofs/px_logo.png
+ format "2803 3621 0 0 2803 3621 1 "
+ proxy_format "1920 1080 0 0 1920 1080 1 HD_1080"
+ origset true
+ version 1
+ auto_alpha true
+ name Px_Logo
+ xpos -512
+ ypos -128
+}
+Invert {
+ name Invert_Logo
+ xpos -512
+ ypos -12
+}
+Transform {
+ translate {50 40}
+ scale 0.036
+ name Trans_Logo
+ xpos -365
+ ypos -8
+}
+Merge2 {
+ inputs 2
+ operation atop
+ name Merge_LogoBG
+ xpos -221
+ ypos -8
+}
+Read {
+ inputs 0
+ file_type tiff
+ file PATH_TO_PLAYERS_HEAD/A000_POLO.tif
+ format "4000 6000 0 0 4000 6000 1 "
+ origset true
+ colorspace sRGB
+ name Read_HeadF
+ xpos -513
+ ypos 41
+}
+Transform {
+ translate {100 -1525}
+ scale 0.125
+ center {0 2000}
+ name Trs_HeadFrnt
+ xpos -365
+ ypos 74
+}
+Merge2 {
+ inputs 2
+ name Merge_HeadFrnt
+ xpos -221
+ ypos 74
+}
+Read {
+ inputs 0
+ file_type tiff
+ file PATH_TO_PLAYERS_HEAD/AR010_POLO.tif
+ format "4000 6000 0 0 4000 6000 1 "
+ origset true
+ colorspace sRGB
+ name Read_HeadR
+ xpos -516
+ ypos 136
+}
+Transform {
+ translate {1300 -1525}
+ scale 0.125
+ center {0 2000}
+ name Trs_HeadR
+ xpos -366
+ ypos 169
+}
+Merge2 {
+ inputs 2
+ name Merge_HeadL
+ xpos -221
+ ypos 169
+}
+Read {
+ inputs 0
+ file_type tiff
+ file PATH_TO_PLAYERS_HEAD/AL010_POLO.tif
+ format "4000 6000 0 0 4000 6000 1 "
+ origset true
+ colorspace sRGB
+ name Read_HeadL
+ xpos -519
+ ypos 234
+}
+Transform {
+ translate {700 -1525}
+ scale 0.125
+ center {0 2000}
+ name Trs_HeadL
+ xpos -370
+ ypos 267
+}
+Merge2 {
+ inputs 2
+ name Merge_HeadR
+ xpos -221
+ ypos 267
+}
+Text2 {
+ inputs 0
+ font_size_toolbar 100
+ font_width_toolbar 100
+ font_height_toolbar 100
+ message "SHOTINFORMATIONSTRING"
+ old_message {{83 72 79 84 73 78 70 79 82 77 65 84 73 79 78 83 84 82 73 78 71}
+   }
+ box {1157 116.5 1867 211.5}
+ xjustify right
+ yjustify bottom
+ transforms {{0 2}
+   }
+ cursor_position 21
+ font {{ Arial : Regular : Arial.ttf : 0 }}
+ global_font_scale 0.3
+ center {1024 778}
+ cursor_initialised true
+ autofit_bbox false
+ initial_cursor_position {{1144.000122 48.00006485}
+   }
+ group_animations {{0} imported: 0 selected: items: "root transform/"}
+ animation_layers {{1 11 1024 778 0 0 1 1 0 0 0 0}
+   }
+ name Text_Client
+ xpos -376
+ ypos 347
+}
+Merge2 {
+ inputs 2
+ name Merge1
+ xpos -221
+ ypos 347
+}
+Text2 {
+ inputs 0
+ font_size_toolbar 100
+ font_width_toolbar 100
+ font_height_toolbar 100
+ message "##_##_####_########_########_####"
+ old_message {{35 35 95 35 35 95 35 35 35 35 95 35 35 35 35 35 35 35 35 95 35 35 35 35 35 35 35 35 95 35 35 35 35}
+   }
+ box {664 41 1868 135}
+ xjustify right
+ yjustify bottom
+ transforms {{0 2}
+   }
+ font {{ Arial : Regular : Arial.ttf : 0 }}
+ global_font_scale 0.55
+ center {1024 778}
+ cursor_initialised true
+ autofit_bbox false
+ initial_cursor_position {{207.5 206.5}
+   }
+ group_animations {{0} imported: 0 selected: items: "root transform/"}
+ animation_layers {{1 11 1024 778 0 0 1 1 0 0 0 0}
+   }
+ name Text_Placeholder
+ xpos -374
+ ypos 406
+}
+Merge2 {
+ inputs 2
+ name Merge2
+ xpos -221
+ ypos 406
+}
+Reformat {
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ name Reformat1
+ xpos -221
+ ypos 466
+}
+Shuffle {
+ alpha white
+ name RemoveAlpha
+ xpos -221
+ ypos 522
+}
+Transform {
+ scale 0.99
+ center {960 540}
+ name ScaleDown
+ xpos -221
+ ypos 584
+}
+Constant {
+ inputs 0
+ channels rgb
+ color 1
+ name WhiteBorder
+ xpos -373
+ ypos 630
+}
+Merge2 {
+ inputs 2
+ name AddBorder
+ xpos -221
+ ypos 654
+}
+set N583aa400 [stack 0]
+Write {
+ file /tmp/PROOF_OUTPUT.jpg
+ file_type jpeg
+ checkHashOnRead false
+ version 3
+ name Write_Proof
+ xpos -221
+ ypos 725
+}
+push $N583aa400
+Viewer {
+ frame_range 1-100
+ name Viewer1
+ selected true
+ xpos 108
+ ypos 406
+}
