@@ -7,14 +7,18 @@ alongside create a CSV file with all pose names by client and px to deliver to t
 
 import os
 import sys
+import time
 import shlex
 import shutil
+import logging
 import colorama  # https://pypi.org/project/colorama/
 import platform
 import subprocess
 import pandas as pd
 import numpy as np
+import multiprocessing as mp
 
+from multiprocessing import Pool
 from glob import glob
 from click import option, command
 from colorama import Fore
@@ -25,7 +29,7 @@ __author__ = "Stephan Osterburg"
 __copyright__ = "Copyright 2020, Pixelgun Studio"
 __credits__ = ["Stephan Osterburg", "Mauricio Baiocchi"]
 __license__ = "MIT"
-__version__ = "0.1.1"
+__version__ = "0.1.5"
 __maintainer__ = ""
 __email__ = "info@pixelgunstudio.com"
 __status__ = "Production"
@@ -95,6 +99,15 @@ def clear_screen():
     _ = subprocess.run('clear' if os.name == 'posix' else 'cls')
 
 
+def call_proc(cmd):
+    """Execute shell command
+    Args:
+        cmd: a given shell command
+    Returns: None
+    """
+    subprocess.run(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
 def define_proof_name(pose, game, team):
     """
     Define base output file name for PDF and CSV
@@ -145,6 +158,94 @@ def get_placeholder(player_pose, df):
     return pose_name
 
 
+def check_tiff_exists(directory, player):
+    """Check if the Camera RAW are already converted
+       and copy it into the tmp directory
+
+    Args:
+        directory: directory name of the team
+        player: either the name of a player
+
+    Returns: Boolean (True/False)
+    """
+    print(Fore.YELLOW + "Checking if TIFF's exists...")
+
+    exists = False
+    images = ['A000_POLO', 'AL010_POLO', 'AR010_POLO']
+
+    # Backward compatibility
+    if os.path.isdir(directory + '/' + player + '/_acquisition/tiff'):
+        poses = glob(directory + '/' + player + '/_acquisition/tiff/*')
+
+        for pose in poses:
+            for image in images:
+                tif_image = pose + '/' + image + '.tif'
+                if os.path.isfile(tif_image):
+                    exists = True
+                    tmp_image = '/tmp/' + pose.split('/')[-1] + '_' + image + '.tif'
+                    shutil.copyfile(tif_image, tmp_image)
+
+    return exists
+
+
+def convert_images(directory, player):
+    """Convert CR2 to TIFF (tmp)
+
+    Args:
+        directory: directory name of the team
+        player: either the name of a player
+
+    Returns: None
+    """
+
+    print(Fore.YELLOW + 'Converting CR2 Images...')
+
+    # Using darktable to convert CR2 to TIFF
+    app = '/Applications/darktable.app/Contents/MacOS/darktable-cli'
+    opt = ' --core --conf plugins/imageio/format/tiff/bpp=16'
+
+    images = ['A000_POLO', 'AL010_POLO', 'AR010_POLO']
+    poses = glob(directory + '/' + player + '/_acquisition/*')
+
+    # HACK/WORKAROUND: Create tmp directories for darktable to e able to run in parallel
+    for pose in poses:
+        for image in images:
+            base_tmp_dir = pose.split('/')[-1]
+            if not os.path.isdir('/tmp/' + base_tmp_dir):
+                os.mkdir('/tmp/' + base_tmp_dir)
+
+            if not os.path.isdir('/tmp/' + base_tmp_dir + '/' + image):
+                os.mkdir('/tmp/' + base_tmp_dir + '/' + image)
+
+    cmd_list = []
+    for pose in poses:
+        for image in images:
+            base_tmp_dir = pose.split('/')[-1]
+            in_image = pose + '/' + image + '.CR2'
+            out_image = '/tmp/' + pose.split('/')[-1] + '_' + image + '.tif'
+            cmd = app + ' ' + in_image + ' ' + out_image + opt + \
+                  ' --configdir /tmp/' + str(base_tmp_dir) + '/' + str(image)
+            cmd_list.append(cmd)
+
+    start_time = time.time()
+    agents = mp.cpu_count()
+    pool = Pool(processes=agents)
+    results = pool.map(call_proc, cmd_list)
+    pool.close()
+    pool.join()
+
+    end_time = time.time()
+    t = int((end_time - start_time) / 60)
+    print(Fore.LIGHTYELLOW_EX + 'Process took: {} min'.format(t))
+
+    # Cleaning up - removing temp directories
+    if results:
+        for pose in poses:
+            base_tmp_dir = pose.split('/')[-1]
+            if os.path.isdir('/tmp/' + base_tmp_dir):
+                shutil.rmtree('/tmp/' + base_tmp_dir)
+
+
 def create_proof(directory, team, player):
     """Create a proof of a given player using Nuke
 
@@ -160,13 +261,13 @@ def create_proof(directory, team, player):
     # Location of Nuke
     app = '/Applications/Nuke12.0v3/Nuke12.0v3.app/Contents/MacOS/Nuke12.0 -x -F 1 '
 
+    # List all poses
     proof_output = directory + '/' + player
-
-    # Backward compatibility
-    if os.path.isdir(proof_output + '/_acquisition/tiff'):
-        poses = glob(proof_output + '/_acquisition/tiff/*')
-    else:
-        poses = glob(proof_output + '/_acquisition/*')
+    poses = glob(proof_output + '/_acquisition/*')
+    item = [x for x in poses if 'tiff' in x]
+    if len(item) != 0:
+        idx = poses.index(item[0])
+        poses.pop(idx)
 
     # Open default CSV file (XLS)
     game = ''.join(directory.rsplit(GlobalDirs.projects)).split('/')[1]
@@ -195,7 +296,7 @@ def create_proof(directory, team, player):
         # Search and replace placeholder text in nuke template file
         placeholder_text = ('PATH_TO_PLAYERS_HEAD', 'PATH_TO_PLAYERS_PROOF', '##_##_####_########_########_####',
                             'SHOTINFORMATIONSTRING', 'PROOF_OUTPUT')
-        replace_text = (pose, proof_output, placeholder, shot_string, pose.split('/')[-1])
+        replace_text = ('/tmp/' + pose.split('/')[-1], proof_output, placeholder, shot_string, pose.split('/')[-1])
 
         find_replace = dict(zip(placeholder_text, replace_text))
         with open(nuke_template, 'r') as tmp_file:
@@ -235,10 +336,19 @@ def create_pdf(game, team, player):
     """
     print(Fore.YELLOW + 'Creating PDF...')
 
+    # Create log
+    log_file = '/tmp/' + team + '.log'
+    logging.basicConfig(filename=log_file, filemode='a', level=logging.INFO)
+
     # Define page title
+    if team in GlobalDirs.teams:
+        team_name = GlobalDirs.teams[team]
+    else:
+        team_name = team
+
     if len(player.split()) == 1:
         player_name = ' '.join(map(str, player.split('_')[::-1])).title()
-    title = GlobalDirs.teams[team] + ' --- ' + player_name
+    title = team_name + ' --- ' + player_name
 
     proof_input = os.path.realpath(GlobalDirs.projects + "/" + game + "/Sections/" + team + '/' + player)
 
@@ -249,9 +359,10 @@ def create_pdf(game, team, player):
         poses = glob(proof_input + '/_acquisition/*' + player + '*')
 
     # Move neutral into first place
-    item = [x for x in poses if 'neutral' in x][0]
-    idx = poses.index(item)
-    poses.insert(0, poses.pop(idx))
+    item = [x for x in poses if 'neutral' in x]
+    if len(item) != 0:
+        idx = poses.index(item[0])
+        poses.insert(0, poses.pop(idx))
 
     # Just in case - remove unwanted parts
     _ = [x for x in poses if 'Thumbs.db' in x]
@@ -268,7 +379,13 @@ def create_pdf(game, team, player):
     pdf.ln()
     for pose in poses:
         render_filename = '/tmp/' + pose.split('/')[-1] + '.jpg'
-        pdf.image(render_filename)
+        # Bail/Write log if one of the images done exist
+        if not os.path.isfile(render_filename):
+            print(Fore.RED + f"Missing pose: {render_filename.split('/')[-1].split('.')[0]}")
+            logging.info(f"Missing pose: {render_filename.split('/')[-1].split('.')[0]}")
+            pass
+        else:
+            pdf.image(render_filename)
 
     # Define output directory and name of PDF
     proof = define_proof_name(poses[0], game, team) + '.pdf'
@@ -315,9 +432,13 @@ def each_player(path, game, team, player):
 
     # put the next three steps into a PriorityQueue to make sure that moving the data
     # has finished first before we clean up the naming
-    qi.put(1, create_proof(path, team, player))
-    qi.put(2, create_pdf(game, team, player))
-    qi.put(3, cleanup(game, team, player))
+    tiff_exists = check_tiff_exists(path, player)
+    if not tiff_exists:
+        qi.put(1, convert_images(path, player))
+
+    qi.put(2, create_proof(path, team, player))
+    qi.put(3, create_pdf(game, team, player))
+    qi.put(4, cleanup(game, team, player))
 
     while not qi.empty():
         qi.get()
@@ -346,15 +467,20 @@ def main(game, team, player):
         print(Fore.RED + 'Error: Path is invalid!')
         sys.exit(1)
 
+    if team in GlobalDirs.teams:
+        team_name = GlobalDirs.teams[team]
+    else:
+        team_name = team
+
     print('\n')
     print(Fore.BLUE + "Project:\t{}".format(game))
-    print(Fore.BLUE + "Team:\t\t{}".format(GlobalDirs.teams[team]))
+    print(Fore.BLUE + "Team:\t\t{}".format(team_name))
 
     if player.lower() == 'all':
         players = glob(path + '/*')
         for counter, value in enumerate(players):
             player = value.split('/')[-1]
-            qo.put(counter, each_player(path, game, team, player) )
+            qo.put(counter, each_player(path, game, team, player))
 
         while not qo.empty():
             qo.get()
