@@ -14,6 +14,7 @@ import sys
 import imghdr
 import shlex
 import logging
+import signal
 import colorama  # https://pypi.org/project/colorama/
 import platform
 import subprocess
@@ -30,7 +31,7 @@ __author__ = "Stephan Osterburg"
 __copyright__ = "Copyright 2020, Pixelgun Studio"
 __credits__ = ["Stephan Osterburg", "Mauricio Baiocchi"]
 __license__ = "MIT"
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 __maintainer__ = ""
 __email__ = "info@pixelgunstudio.com"
 __status__ = "Production"
@@ -234,6 +235,11 @@ def main(game, team, player, directory, card):
 
     # Call function to clear screen
     clear_screen()
+
+    # If Photoshop runs already kill it
+    process = subprocess.Popen('pgrep Photoshop', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pid, err = process.communicate()
+    os.kill(int(pid.decode("utf-8")), signal.SIGKILL)
 
     # Check if given directory is valid, i.e.: /Pixelgun_Projects/2K_1018_NBA2K21/Sections/orl/birch_khem
     path = os.path.realpath(GlobalDirs.projects + "/" + game + "/Sections/" + team)
