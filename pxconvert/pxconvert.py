@@ -14,13 +14,13 @@ import sys
 import imghdr
 import shlex
 import logging
-import yagmail
 import colorama  # https://pypi.org/project/colorama/
 import platform
 import subprocess
 
 from glob import glob
 from tqdm import tqdm
+from pathlib import Path
 from shutil import copyfile
 from queue import PriorityQueue
 from click import command, option
@@ -30,7 +30,7 @@ __author__ = "Stephan Osterburg"
 __copyright__ = "Copyright 2020, Pixelgun Studio"
 __credits__ = ["Stephan Osterburg", "Mauricio Baiocchi"]
 __license__ = "MIT"
-__version__ = "0.1.1"
+__version__ = "0.1.3"
 __maintainer__ = ""
 __email__ = "info@pixelgunstudio.com"
 __status__ = "Production"
@@ -116,8 +116,9 @@ def copy_xmp(directory, player, src_xmp, task):
     else:
         print(Fore.YELLOW + 'Cleaning XMP...')
 
-    raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
     # raw_images = glob('/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam/jefferson_amile/_acquisition/01_12_2020_jefferson_amile_brow_furrow_tk1/*')
+    # directory = '/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam'
+    raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
 
     for raw_image in raw_images:
         name, suffix = os.path.splitext(raw_image)
@@ -135,7 +136,7 @@ def copy_xmp(directory, player, src_xmp, task):
     print(Fore.GREEN + 'DONE')
 
 
-def convert_to_tiff(directory, player):
+def convert_to_tiff(directory, player, *args, **kwargs):
     """Convert CR2 to TIFF 16bit
     Create a TIFF sub-directory and run Adobe Photoshop to convert the images
 
@@ -149,8 +150,35 @@ def convert_to_tiff(directory, player):
     app = '/usr/bin/osascript'
     scpt = '/Users/px/Projects/pxconvert/convert_img.scpt'
 
-    raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
     # raw_images = glob('/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam/jefferson_amile/_acquisition/01_12_2020_jefferson_amile_brow_furrow_tk1/*')
+    # directory = '/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam'
+
+    # Get Camera RAW images
+    pose = kwargs.get('pose', None)
+    if pose is None:
+        raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
+    else:
+        poses = glob(directory + '/' + player + '/_acquisition/*')
+        poses = [s for s in poses if pose in s]
+        if len(poses) > 1:
+            pose = poses[0].split('/')[-1][:-4]
+        else:
+            pose = poses[0].split('/')[-1]
+
+        raw_images = glob(directory + '/' + player + '/_acquisition/' + pose + '*/*')
+
+    # Get all poses
+    poses = glob(directory + '/' + player + '/_acquisition/*')
+    # Drop tiff from list if already exists
+    item = [x for x in poses if 'tiff' in x]
+    if len(item) != 0:
+        idx = poses.index(item[0])
+        poses.pop(idx)
+    # Create tiff directory
+    for pose in poses:
+        dir_list = pose.split('/')
+        tiff_dir = Path('/'.join(dir_list[:-1]) + '/tiff/' + dir_list[-1])
+        tiff_dir.mkdir(parents=True, exist_ok=True)
 
     # Create log
     log_file = '/tmp/' + player + '.log'
@@ -162,17 +190,16 @@ def convert_to_tiff(directory, player):
 
         if suffix and re.match(suffix, '.CR2', re.IGNORECASE):
             # Insert TIFF name into directory and set tif file name
-            k = name.rfind('/')
-            new_name = name[:k] + '/TIFF/' + name[k + 1:]
-            tif_image = new_name + '.tif'
-
-            # Create TIFF Directory
-            tiff_dir = name[:k] + '/TIFF'
+            dir_list = raw_image.split('/')
+            tiff_dir = '/'.join(dir_list[:-2]) + '/tiff'
             if not os.path.isdir(tiff_dir):
                 os.mkdir(tiff_dir)
 
+            tif_image = tiff_dir + '/' + '/'.join(dir_list[-2:])
+            tif_image = tif_image.split('.')[0] + '.tif'
+
             cmd = app + ' ' + scpt + ' ' + raw_image + ' ' + tif_image
-            # wait for command to complete
+            # Using the call function to wait for command to complete
             subprocess.call(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
             # Create log file for all failed conversion
@@ -180,26 +207,6 @@ def convert_to_tiff(directory, player):
                 logging.info("{} did NOT convert".format(raw_image.split('/')[-1]))
 
     print(Fore.GREEN + 'DONE')
-
-
-def check_log(player):
-    """Send log file if not empty and remove it
-
-    :param player: Name of the player
-    :return: None
-    """
-    receiver = 'sunny@pixelgunstudio.com'
-    subject = f'FAILED conversion for {player}'
-    filename = f'/tmp/{player}.log'
-
-    yag = yagmail.SMTP(user='info@pixelgunstudio.com')
-    yag.send(
-        to=receiver,
-        subject=subject,
-        attachments=filename,
-    )
-
-    os.remove(f'/tmp/{player}.log')
 
 
 def clear_screen():
@@ -210,8 +217,9 @@ def clear_screen():
 @option('--game', '-g', default='2K_1018_NBA2K21', help='Game name', type=str, required=True)
 @option('--team', '-t', help='Team name', type=str, required=True)
 @option('--player', '-p', help='Player name', type=str, required=True)
+@option('--directory', '-d', default=None, help='Directory of a pose', type=str)
 @option('--card', '-c', help='Color Card', type=str)
-def main(game, team, player, card):
+def main(game, team, player, directory, card):
     """
     Converting the images from CR2 to TIFF16 using Adobe Photoshop CC 2019.
 
@@ -219,6 +227,8 @@ def main(game, team, player, card):
     game:      Game name, i.e. 2K_1018_NBA2K21 [Default]
     team:      Team name, i.e. 'det' for the 'Detroit Pistons'
     player:    Player name, i.e. 'king_louis'
+    directory: Directory name of a pose, either as full name or pose name,
+               i.e.: 01_12_2020_jefferson_amile_yell_angry_tk2 OR yell_angry
     card:      To use color card, pass in the date of the shoot, i.e. 01_03_2020
     """
 
@@ -256,7 +266,7 @@ def main(game, team, player, card):
     # Copy XMP function
     q.put(1, copy_xmp(path, player, color_card, True))
     # Convert Camera RAW to TIFF
-    q.put(2, convert_to_tiff(path, player))
+    q.put(2, convert_to_tiff(path, player, pose=directory))
     # Remove XMP function
     q.put(3, copy_xmp(path, player, color_card, False))
 
@@ -264,9 +274,7 @@ def main(game, team, player, card):
         q.get()
 
     # Check for failed image conversions and send log if needed
-    # TODO: send email when done including the log file if needed
     if os.stat(f'/tmp/{player}.log').st_size > 0:
-        # check_log(player)
         print(Fore.RED + "There are some failed images for {}".format(player))
         print(Fore.RED + "Check log file: {}".format(f'/tmp/{player}.log'))
     else:
