@@ -112,9 +112,6 @@ def copy_xmp(directory, player, xmps, task):
     :return: None
     """
 
-    if os.path.isfile(f'{directory}/{player}/_acquisition/.converted'):
-        return
-
     if task:
         print(Fore.YELLOW + 'Copying XMP...')
     else:
@@ -124,15 +121,26 @@ def copy_xmp(directory, player, xmps, task):
     check = ['_thumbs', 'tiff']
     poses = [p for p in poses if p.split('/')[-1] not in check]
 
-    for pose in poses:
-        if task:
-            open(f'{directory}/{player}/_acquisition/.converted', 'a').close()
-            for xmp in xmps:
-                _ = '/'.join(xmp.split('/')[:-1])
-                dst = xmp.replace(_, pose)
-                copyfile(xmp, dst)
+    if task:
+        if len(xmps) == 1:
+            raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
+
+            for raw_image in raw_images:
+                name, suffix = os.path.splitext(raw_image)
+                if suffix and re.match(suffix, '.CR2', re.IGNORECASE):
+                    # Copy XMP template to be side by side with the CR2 images
+                    k = name.rfind('/')
+                    new_name = name[:k] + '/' + name[k + 1:]
+                    dst_xmp = new_name + '.xmp'
+                    copyfile(xmps[0], dst_xmp)
         else:
-            os.remove(f'{directory}/{player}/_acquisition/.converted')
+            for pose in poses:
+                for xmp in xmps:
+                    _ = '/'.join(xmp.split('/')[:-1])
+                    dst = xmp.replace(_, pose)
+                    copyfile(xmp, dst)
+    else:
+        for pose in poses:
             for xmp in glob(pose + '/*.xmp'):
                 os.remove(xmp)
 
@@ -238,7 +246,7 @@ def main(game, team, player, directory, card):
     # If Photoshop runs already kill it
     process = subprocess.Popen('pgrep Photoshop', shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     pid, err = process.communicate()
-    os.kill(int(pid.decode("utf-8")), signal.SIGKILL)
+    if pid: os.kill(int(pid.decode("utf-8")), signal.SIGKILL)
 
     # Check if given directory is valid, i.e.: /Pixelgun_Projects/2K_1018_NBA2K21/Sections/orl/birch_khem
     path = os.path.realpath(GlobalDirs.projects + "/" + game + "/Sections/" + team)
@@ -251,11 +259,11 @@ def main(game, team, player, directory, card):
 
     # Define Color Card
     if card:
-        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{card}/*.xmp')
+        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{card}/*')
     else:
         _ = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/*')
         latest_card = max(_, key=os.path.getctime).split('/')[-1]
-        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{latest_card}/*.xmp')
+        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{latest_card}/*')
 
     if team in GlobalDirs.teams:
         team_name = GlobalDirs.teams[team]
