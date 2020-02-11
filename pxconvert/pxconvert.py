@@ -120,8 +120,6 @@ def copy_xmp(directory, player, xmps, task):
     else:
         print(Fore.YELLOW + 'Cleaning XMP...')
 
-    # raw_images = glob('/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam/jefferson_amile/_acquisition/01_12_2020_jefferson_amile_brow_furrow_tk1/*')
-    # directory = '/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam'
     poses = glob(directory + '/' + player + '/_acquisition/*')
     check = ['_thumbs', 'tiff']
     poses = [p for p in poses if p.split('/')[-1] not in check]
@@ -154,9 +152,6 @@ def convert_to_tiff(directory, player, *args, **kwargs):
     # Execute Adobe PS via osascript to convert CR2 to TIFF16 with javascript
     app = '/usr/bin/osascript'
     scpt = '/Users/px/Projects/pxconvert/convert_img.scpt'
-
-    # raw_images = glob('/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam/jefferson_amile/_acquisition/01_12_2020_jefferson_amile_brow_furrow_tk1/*')
-    # directory = '/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam'
 
     # Get Camera RAW images
     pose = kwargs.get('pose', None)
