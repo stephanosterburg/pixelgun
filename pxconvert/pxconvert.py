@@ -31,7 +31,7 @@ __author__ = "Stephan Osterburg"
 __copyright__ = "Copyright 2020, Pixelgun Studio"
 __credits__ = ["Stephan Osterburg", "Mauricio Baiocchi"]
 __license__ = "MIT"
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 __maintainer__ = ""
 __email__ = "info@pixelgunstudio.com"
 __status__ = "Production"
@@ -102,15 +102,18 @@ class GlobalDirs:
                 'px14': '10.0.53.114'}
 
 
-def copy_xmp(directory, player, src_xmp, task):
+def copy_xmp(directory, player, xmps, task):
     """Copy XMP template along  side every Camera RAW image so that
     the conversion process in Adobe PS does the right thing
 
     :param directory: path to the team
     :param player: name of a player
-    :param src_xmp: XMP file to be copied
+    :param xmps: XMP file(s) to be copied
     :return: None
     """
+
+    if os.path.isfile(f'{directory}/{player}/_acquisition/.converted'):
+        return
 
     if task:
         print(Fore.YELLOW + 'Copying XMP...')
@@ -119,20 +122,21 @@ def copy_xmp(directory, player, src_xmp, task):
 
     # raw_images = glob('/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam/jefferson_amile/_acquisition/01_12_2020_jefferson_amile_brow_furrow_tk1/*')
     # directory = '/Volumes/Bigfoot/Pixelgun_Dev/stephan/StephanTesting/testTeam'
-    raw_images = glob(directory + '/' + player + '/_acquisition/*/*')
+    poses = glob(directory + '/' + player + '/_acquisition/*')
+    check = ['_thumbs', 'tiff']
+    poses = [p for p in poses if p.split('/')[-1] not in check]
 
-    for raw_image in raw_images:
-        name, suffix = os.path.splitext(raw_image)
-        if suffix and re.match(suffix, '.CR2', re.IGNORECASE):
-            # Copy XMP template to be side by side with the CR2 images
-            k = name.rfind('/')
-            new_name = name[:k] + '/' + name[k + 1:]
-            dst_xmp = new_name + '.xmp'
-
-            if task:
-                copyfile(src_xmp, dst_xmp)
-            else:
-                os.remove(dst_xmp)
+    for pose in poses:
+        if task:
+            open(f'{directory}/{player}/_acquisition/.converted', 'a').close()
+            for xmp in xmps:
+                _ = '/'.join(xmp.split('/')[:-1])
+                dst = xmp.replace(_, pose)
+                copyfile(xmp, dst)
+        else:
+            os.remove(f'{directory}/{player}/_acquisition/.converted')
+            for xmp in glob(pose + '/*.xmp'):
+                os.remove(xmp)
 
     print(Fore.GREEN + 'DONE')
 
@@ -252,11 +256,11 @@ def main(game, team, player, directory, card):
 
     # Define Color Card
     if card:
-        color_card = f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{card}/{card}_cc.xmp'
+        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{card}/*.xmp')
     else:
         _ = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/*')
         latest_card = max(_, key=os.path.getctime).split('/')[-1]
-        color_card = f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{latest_card}/{latest_card}_cc.xmp'
+        color_cards = glob(f'{GlobalDirs.projects}/{game}/Source_Pixelgun/Color_Correction/{latest_card}/*.xmp')
 
     if team in GlobalDirs.teams:
         team_name = GlobalDirs.teams[team]
@@ -270,11 +274,11 @@ def main(game, team, player, directory, card):
     print('\n')
 
     # Copy XMP function
-    q.put(1, copy_xmp(path, player, color_card, True))
+    q.put(1, copy_xmp(path, player, color_cards, True))
     # Convert Camera RAW to TIFF
     q.put(2, convert_to_tiff(path, player, pose=directory))
     # Remove XMP function
-    q.put(3, copy_xmp(path, player, color_card, False))
+    q.put(3, copy_xmp(path, player, color_cards, False))
 
     while not q.empty():
         q.get()
